@@ -4,6 +4,9 @@ A from-scratch PyTorch implementation of the Transformer encoder–decoder archi
 
 The Transformer is implemented manually — positional encoding, multi-head attention, layer normalization, encoder/decoder stacks, and the output generator are all written from the ground up rather than imported from `torch.nn.Transformer` or HuggingFace `transformers`. The goal of the project is pedagogical: to understand the architecture by building it.
 
+> **Notebook preview:** [Open in nbviewer](https://nbviewer.org/github/Salman-Awaise/arxiv-transformer-summarizer/blob/main/Arxiv-transformer-summarizer.ipynb)
+>
+> *(GitHub's notebook renderer can be unreliable — nbviewer is the canonical preview.)*
 ---
 
 ## Overview
