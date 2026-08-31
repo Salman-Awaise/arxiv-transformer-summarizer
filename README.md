@@ -1,12 +1,14 @@
 # Transformer-Based Abstractive Summarizer
 
+[![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-from%20scratch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Datasets-arXiv-FFD21E)](https://huggingface.co/datasets/scientific_papers)
+[![Paper](https://img.shields.io/badge/paper-Attention%20Is%20All%20You%20Need-b31b1b)](https://arxiv.org/abs/1706.03762)
+
 A from-scratch PyTorch implementation of the Transformer encoder–decoder architecture (Vaswani et al., 2017) trained for abstractive summarization on scientific papers from the arXiv dataset.
 
 The Transformer is implemented manually — positional encoding, multi-head attention, layer normalization, encoder/decoder stacks, and the output generator are all written from the ground up rather than imported from `torch.nn.Transformer` or HuggingFace `transformers`. The goal of the project is pedagogical: to understand the architecture by building it.
 
-> **Notebook preview:** [Open in nbviewer](https://nbviewer.org/github/Salman-Awaise/arxiv-transformer-summarizer/blob/main/Arxiv-transformer-summarizer.ipynb)
->
-> *(GitHub's notebook renderer can be unreliable — nbviewer is the canonical preview.)*
 ---
 
 ## Overview
@@ -68,7 +70,7 @@ The implementation closely follows the original "Attention is All You Need" pape
 - **Slice used**: `train[:1%]` — roughly 1% of the training split, kept small for fast iteration on limited compute.
 - **Fields used**: `article` (full paper text) and `abstract` (target summary).
 
-The notebook also contains a `clean_and_filter` helper that replaces `@xmathN` LaTeX-style math placeholders with `[MATH]` tokens and filters by character length, intended as an optional preprocessing pass on the raw data.
+`summarizer/data.py` also contains a `clean_and_filter` helper that replaces `@xmathN` LaTeX-style math placeholders with `[MATH]` tokens and filters by character length, intended as an optional preprocessing pass on the raw data.
 
 ---
 
@@ -135,19 +137,31 @@ nltk.download('punkt_tab')
 
 ## How to Run
 
-1. Clone this repository.
-2. Open the notebook in Jupyter, Colab, or Kaggle.
-3. Run the cells in order:
-   - Install dependencies.
-   - Load the dataset.
-   - Train the BPE tokenizer (saves to `custom_tokenizer/`).
-   - Preprocess the dataset.
-   - Build the model with `make_model(vocab_size)`.
-   - Run the training loop.
-   - Plot metrics.
-   - Generate sample summaries.
+```bash
+pip install -r requirements.txt
+python -c "import nltk; nltk.download('punkt_tab')"
 
-The notebook is self-contained — no external scripts or config files are needed.
+python -m summarizer.train
+```
+
+`summarizer.train` runs the whole pipeline end to end: it loads the dataset, trains
+the BPE tokenizer into `custom_tokenizer/`, tokenizes and batches the data, builds
+the model with `make_model(vocab_size)`, trains it while scoring one sample per
+epoch, and prints generated summaries for five samples at the end.
+
+Every hyperparameter lives in `summarizer/config.py`. To use the pieces separately:
+
+```python
+from summarizer.data import load_arxiv
+from summarizer.tokenization import build_tokenizer
+from summarizer.model import make_model
+from summarizer.decoding import generate_summary
+from summarizer.visualize import plot_training_history
+
+dataset = load_arxiv()
+tokenizer = build_tokenizer(dataset)
+model = make_model(tokenizer.get_vocab_size())
+```
 
 ---
 
@@ -155,12 +169,22 @@ The notebook is self-contained — no external scripts or config files are neede
 
 ```
 .
-├── Group_31_Transformer_based_summarizer.ipynb   # Main notebook
-├── custom_tokenizer/                              # Generated at runtime
+├── README.md
+├── requirements.txt
+├── summarizer/
+│   ├── config.py          # Hyperparameters, dataset settings, artifact paths
+│   ├── tokenization.py    # Byte-Level BPE training and loading
+│   ├── data.py            # Dataset loading, tokenizing, batching
+│   ├── layers.py          # Positional encoding, norm, attention, feedforward
+│   ├── model.py           # Encoder/decoder stacks and make_model
+│   ├── decoding.py        # greedy_decode and generate_summary
+│   ├── metrics.py         # ROUGE, BLEU, BERTScore
+│   ├── train.py           # Training loop and sample generation
+│   └── visualize.py       # Token-length and training-metric plots
+├── custom_tokenizer/      # Generated at runtime
 │   ├── vocab.json
 │   └── merges.txt
-├── corpus.txt                                     # Generated at runtime; tokenizer training corpus
-└── README.md
+└── corpus.txt             # Generated at runtime; tokenizer training corpus
 ```
 
 ---
@@ -173,8 +197,10 @@ A few honest caveats for anyone using or extending this work:
 - **The dataset slice is small** (1% of arXiv train). The model is unlikely to generalize well to arbitrary scientific abstracts with this much data.
 - **Model size is large relative to the data**. `d_model=768, d_ff=3072, N=6` is roughly GPT-2-base scale. With more data or a smaller model, training would likely be more stable.
 - **Input length of 128 tokens is short** for full scientific papers. Articles are heavily truncated; consider longer context (or a long-context Transformer variant) for better fidelity.
-- **The `clean_and_filter` function is defined but not applied** in the main pipeline. If you want to use it, apply it via `dataset.map(clean_and_filter, ...)` before tokenization.
+- **The `clean_and_filter` function is defined but not applied** in the main pipeline. It lives in `summarizer/data.py`; to use it, apply it via `dataset.map(clean_and_filter, ...)` before tokenization.
 - **The decoder uses sampling, not argmax**, despite being named `greedy_decode`. See the Decoding section above.
+- **Each decoder layer shares one attention module between masked self-attention and cross-attention.** `make_model` passes the same `MultiHeadedAttention` instance as both `self_attn` and `src_attn`, so a decoder layer's Q/K/V/output projections are shared across the two roles rather than learned separately. The Annotated Transformer reference passes a deepcopy to each (`c(attn), c(attn)`). This halves the decoder's attention parameters and forces one projection set to serve two different jobs. It is preserved here as-is; to separate them, pass `copy.deepcopy(attn)` for the second argument.
+- **The token-length histograms are capped at 128.** `plot_token_lengths` encodes with a tokenizer that already has `enable_truncation(max_length=128)` set, so no article can report more than 128 tokens. To see the true distribution, encode with truncation disabled.
 
 ---
 

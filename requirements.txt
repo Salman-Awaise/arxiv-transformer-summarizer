@@ -1,0 +1,8 @@
+torch
+datasets
+tokenizers
+rouge_score
+bert_score
+nltk
+matplotlib
+tqdm

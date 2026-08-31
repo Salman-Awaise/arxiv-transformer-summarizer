@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+corpus.txt
+custom_tokenizer/
+.venv/
+venv/
